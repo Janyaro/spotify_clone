@@ -1,227 +1,203 @@
-async function getSongs() {
+let currfolder;
+let songs = [];
+let currentSong = null;
+let audio = null;
+let songindex = 0;
+
+async function getSongs(folder) {
   try {
-    // Fetch the HTML from the server
-    let a = await fetch("http://127.0.0.1:3000/songs/");
+    currfolder = folder;
+    let a = await fetch(`http://127.0.0.1:3000/${currfolder}`);
     let response = await a.text();
 
-    // Create a div and set its innerHTML to the fetched HTML
     let div = document.createElement("div");
     div.innerHTML = response;
 
-    // Extract .mp3 links
     let as = div.getElementsByTagName("a");
-    let songs = [];
+    songs = [];
     for (let index = 0; index < as.length; index++) {
       const element = as[index];
       if (element.href.endsWith(".mp3")) {
-        songs.push(element.href.split("/songs/")[1]);
+        songs.push(element.href.split(`${currfolder}`)[1]);
       }
     }
+
+    // Call function to populate song list after fetching
+    populateSongList();
+
     return songs;
   } catch (error) {
-    console.error("Error fetching or processing data:", error);
     return [];
   }
 }
 
-async function main() {
-  let currentSong = null; // Keep track of the current song
-  let audio = null; // Single Audio instance to avoid overlapping
-  let songindex = 0;
-  let songs = await getSongs();
-  console.log(songs);
+function convertToTimeFormat(seconds) {
+  let minutes = Math.floor(seconds / 60);
+  let remainingSeconds = Math.floor(seconds % 60);
+  let formattedMinutes = minutes.toString().padStart(2, '0');
+  let formattedSeconds = remainingSeconds.toString().padStart(2, '0');
+  return `${formattedMinutes}:${formattedSeconds}`;
+}
 
-  function convertToTimeFormat(seconds) {
-    // Calculate minutes and seconds
-    let minutes = Math.floor(seconds / 60);
-    let remainingSeconds = Math.floor(seconds % 60);
+function cleanSongName(songName) {
+  return decodeURIComponent(songName).replace(/[^\w\s\.-]/g, "").trim();
+}
 
-    // Pad minutes and seconds with leading zeros if needed
-    let formattedMinutes = minutes.toString().padStart(2, '0');
-    let formattedSeconds = remainingSeconds.toString().padStart(2, '0');
-
-    // Return the formatted string
-    return `${formattedMinutes}:${formattedSeconds}`;
-  }
-
-  if (!songs || songs.length === 0) {
-    console.log("No songs found!");
-    return;
-  }
-
+function populateSongList() {
   let songUl = document.querySelector(".songlist ul");
   if (!songUl) {
-    console.error("The song list container is missing!");
     return;
   }
 
-  function cleanSongName(songName) {
-    // Decode percent-encoded characters and clean up the name
-    return decodeURIComponent(songName)
-      .replace(/[^\w\s\.-]/g, "")
-      .trim();
-  }
+  songUl.innerHTML = ''; // Clear the existing list
 
-  // Populate the song list
-  for (const element of songs) {
-    let cleanName = cleanSongName(element);
-    songUl.innerHTML += `<li title="${cleanName}">${cleanName}</li>`;
-  }
-
-  // Add event listeners to each list item
-  Array.from(songUl.getElementsByTagName("li")).forEach((e, index) => {
-    e.addEventListener("click", () => {
-      let selectedSong = songs[index]; // Get the song corresponding to the clicked list item
-
-      if (audio) {
-        audio.pause(); // Pause the currently playing song
-        audio.currentTime = 0; // Reset playback
-      }
-
-      // Play the selected song
-      currentSong = selectedSong;
-      audio = new Audio(`/songs/${currentSong}`);
-      audio.play();
-      console.log(`Now playing: ${currentSong}`);
-      document.querySelector(".songinfo").innerHTML = `${currentSong}`;
-      document.querySelector(".songtime").innerHTML = "00:00 / 00:00"; // Reset time to "00:00 / 00:00"
-      
-      // Update the time for this song
-      audio.addEventListener("timeupdate", () => {
-        let currentTime = convertToTimeFormat(audio.currentTime);
-        let totalTime = convertToTimeFormat(audio.duration);
-        document.querySelector(".songtime").innerHTML = `${currentTime} / ${totalTime}`;
-
-        // Ensure circle element exists before updating
-        let circle = document.querySelector('.circle');  // Make sure to adjust the selector to your circle element
-        if (circle && audio.duration > 0) {
-          let progressPercentage = (audio.currentTime / audio.duration) * 100;
-          circle.style.left = `${progressPercentage}%`;  // Move the circle based on progress
-        }
-      });
-    });
+  songs.forEach((song, index) => {
+    let cleanName = cleanSongName(song);
+    let li = document.createElement("li");
+    li.title = cleanName;
+    li.textContent = cleanName;
+    li.addEventListener("click", () => playSong(index));
+    songUl.appendChild(li);
   });
+}
 
+function playSong(index) {
+  if (audio) {
+    audio.pause();
+    audio.currentTime = 0;
+  }
+
+  currentSong = songs[index];
+  audio = new Audio(`/${currfolder}/${currentSong}`);
+  audio.play();
+  document.querySelector(".songinfo").innerHTML = currentSong;
+  document.querySelector(".songtime").innerHTML = "00:00 / 00:00";
+
+  audio.addEventListener("timeupdate", () => {
+    let currentTime = convertToTimeFormat(audio.currentTime);
+    let totalTime = convertToTimeFormat(audio.duration);
+    document.querySelector(".songtime").innerHTML = `${currentTime} / ${totalTime}`;
+
+    let circle = document.querySelector('.circle');
+    if (circle && audio.duration > 0) {
+      let progressPercentage = (audio.currentTime / audio.duration) * 100;
+      circle.style.left = `${progressPercentage}%`;
+    }
+  });
+}
+
+async function displyAlbums() {
+  let a = await fetch(`http://127.0.0.1:3000/songs/`);
+  let response = await a.text();
+
+  let div = document.createElement("div");
+  div.innerHTML = response;
+
+  let anchors = div.getElementsByTagName("a");
+  let cardContainers = document.getElementsByClassName('cardContainer');
+
+  // Loop over each anchor tag and process the album info
+  Array.from(anchors).forEach(async e => {
+    if (e.href.includes('/songs/')) {
+      let folder = e.href.split('/').splice(-2)[0];
+
+      try {
+        let albumInfoResponse = await fetch(`http://127.0.0.1:3000/songs/${folder}/info.json`);
+        let albumInfo = await albumInfoResponse.json();
+        console.log(albumInfo);
+
+        // Prepare the HTML for the card
+        let cardHTML = `
+          <div data-folder="${folder}" class="card round">
+            <div class="play">
+              <img src="/play-circle-svgrepo-com (1).svg" alt="Play Icon">
+            </div>
+            <img src="/songs/${folder}.cover.jpg" alt="${albumInfo.title} image">
+            <h3>${albumInfo.title}</h3>
+            <p>${albumInfo.Status}</p>
+          </div>
+        `;
+
+        // Assuming you're appending to the first cardContainer
+        if (cardContainers.length > 0) {
+          // Use the first cardContainer to add the card
+          cardContainers[0].innerHTML += cardHTML;
+        } else {
+          console.error("Card container not found!");
+        }
+
+      } catch (error) {
+        console.error("Error fetching album info:", error);
+      }
+    }
+  });
+    
+  }
+
+
+
+async function main() {
+  displyAlbums();
   let play = document.getElementById("playbtn");
   let previous = document.getElementById("previousbtn");
   let next = document.getElementById("nextbtn");
 
-  // Add event listeners to the play button
   play.addEventListener("click", () => {
     if (audio && audio.paused) {
-      // Check if audio exists and is paused
       audio.play();
-      play.src = "play-circle-stroke-rounded.svg"; // Change to your "playing" icon
-      console.log("song play now");
+      play.src = "play-circle-stroke-rounded.svg";
+      
     } else if (audio) {
       audio.pause();
-      play.src = "pause.svg"; // Change to your "paused" icon
-      console.log("song paused");
+      play.src = "pause.svg";
+      
     } else {
-      console.log("No audio object available.");
+      
     }
   });
 
-  if (!currentSong) {
-    currentSong = songs[songindex]; // Select the first song
-    audio = new Audio(`/songs/${currentSong}`);
-    audio.play();
-    console.log(`Now playing: ${currentSong}`);
-    play.src = "play-circle-stroke-rounded.svg"; // Change to your "playing" icon
-
-    document.querySelector(".songinfo").innerHTML = `${currentSong}`;
-    document.querySelector(".songtime").innerHTML = "00:00 / 00:00"; // Reset time to "00:00 / 00:00"
-    
-    // Update the time for this song
-    audio.addEventListener("timeupdate", () => {
-      let currentTime = convertToTimeFormat(audio.currentTime);
-      let totalTime = convertToTimeFormat(audio.duration);
-      document.querySelector(".songtime").innerHTML = `${currentTime} / ${totalTime}`;
-
-      // Ensure circle element exists before updating
-      let circle = document.querySelector('.circle');
-      if (circle && audio.duration > 0) {
-        let progressPercentage = (audio.currentTime / audio.duration) * 100;
-        circle.style.left = `${progressPercentage}%`;  // Move the circle based on progress
-      }
-    });
-  }
-
-  // Previous song logic
   previous.addEventListener("click", () => {
     if (songindex <= 0) {
       alert("No previous song available");
     } else {
       songindex -= 1;
-      if (audio) {
-        audio.pause();
-      }
-      currentSong = songs[songindex];
-      audio = new Audio(`/songs/${currentSong}`);
-      audio.play();
-      console.log("play previous song");
-
-      document.querySelector(".songinfo").innerHTML = `${currentSong}`;
-      document.querySelector(".songtime").innerHTML = "00:00 / 00:00"; // Reset time to "00:00 / 00:00"
-      
-      // Update the time for this song
-      audio.addEventListener("timeupdate", () => {
-        let currentTime = convertToTimeFormat(audio.currentTime);
-        let totalTime = convertToTimeFormat(audio.duration);
-        document.querySelector(".songtime").innerHTML = `${currentTime} / ${totalTime}`;
-
-        // Ensure circle element exists before updating
-        let circle = document.querySelector('.circle');
-        if (circle && audio.duration > 0) {
-          let progressPercentage = (audio.currentTime / audio.duration) * 100;
-          circle.style.left = `${progressPercentage}%`;  // Move the circle based on progress
-        }
-      });
+      playSong(songindex);
     }
   });
 
-  // Next song logic
   next.addEventListener("click", () => {
     if (songindex >= songs.length - 1) {
       alert("No next song available");
     } else {
       songindex += 1;
-      if (audio) {
-        audio.pause();
-      }
-      currentSong = songs[songindex];
-      audio = new Audio(`/songs/${currentSong}`);
-      audio.play();
-      console.log("play next song");
-
-      document.querySelector(".songinfo").innerHTML = `${currentSong}`;
-      document.querySelector(".songtime").innerHTML = "00:00 / 00:00"; // Reset time to "00:00 / 00:00"
-      
-      // Update the time for this song
-      audio.addEventListener("timeupdate", () => {
-        let currentTime = convertToTimeFormat(audio.currentTime);
-        let totalTime = convertToTimeFormat(audio.duration);
-        document.querySelector(".songtime").innerHTML = `${currentTime} / ${totalTime}`;
-
-        // Ensure circle element exists before updating
-        let circle = document.querySelector('.circle');
-        if (circle && audio.duration > 0) {
-          let progressPercentage = (audio.currentTime / audio.duration) * 100;
-          circle.style.left = `${progressPercentage}%`;  // Move the circle based on progress
-        }
-      });
+      playSong(songindex);
     }
   });
 
-  // add event on the hamburger to show the left menu bar
-  document.querySelector('.menu').addEventListener('click',()=>{
+  document.querySelector('.menu').addEventListener('click', () => {
     document.querySelector('.left').style.left = '0';
-  })
+  });
 
-  // add event into the close button to close the left ment
-  document.querySelector('.closebtn').addEventListener('click',()=>{
-    document.querySelector('.left').style.left = '-120% ';
-  })
+  document.querySelector('.closebtn').addEventListener('click', () => {
+    document.querySelector('.left').style.left = '-120%';
+  });
+
+  document.getElementById('volcontroller').addEventListener('change', (e) => {
+    if (audio) {
+      audio.volume = parseInt(e.target.value) / 100;
+    }
+  });
+
+  Array.from(document.getElementsByClassName('card')).forEach(e => {
+    e.addEventListener('click', async item => {
+      let folder = item.currentTarget.dataset.folder;
+      songs = await getSongs(`songs/${folder}/`);
+    });
+  });
+
+  // Load songs and play first song
+  await getSongs("songs/crs/");
+  playSong(0);
 }
 
 main();

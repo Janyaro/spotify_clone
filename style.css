@@ -101,10 +101,9 @@ li :hover {
 /* Center the cardContainer */
 .cardContainer {
     display: flex;
-    flex-wrap: wrap;
     justify-content: space-evenly;
-    /* max-height: 100vh; */
-    /* overflow: scroll; */
+    flex-wrap: wrap;
+    gap: 20px;
     overflow-y: scroll;
 }
 
@@ -125,7 +124,7 @@ li :hover {
 
 /* Card styling */
 .card {
-    width: 150px;
+    width: 200px;
     padding: 3px;
     margin: 4px;
     position: relative
@@ -197,7 +196,7 @@ li :hover {
     width: 69vw;
     position: fixed;
     bottom: 0;
-    height: 40px;
+    height: 95px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -209,6 +208,22 @@ li :hover {
     display: flex;
     justify-content: center;
     gap: 16px;
+}
+.timevol{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: center;
+}
+.volume{
+    display: flex;
+    align-items: center;
+    width: 100px;
+    gap: 5px;
+}
+input[type="range"] {
+    height:4px;
+    width:100%;
 }
 .songlist{
     padding: 10px;
@@ -277,7 +292,9 @@ width: 25px;
 text-overflow: ellipsis;
 white-space: nowrap;
 }
-
+.close{
+    display: none;
+}
 @media (max-width :1200px) {
     .left{
         /* background-color: red; */
@@ -297,12 +314,22 @@ white-space: nowrap;
 .menu{
     display: block;
 }
-
+.close{
+    display: block;
+}
 .close img{
     top: 18px;
     position: absolute;
     right: 17px;
 
+}
+.card{
+    background-color: rgba(46, 47, 53, 0.447);
+    /* width: 72%; */
+    display: flex
+;
+    align-items: center;
+    flex-direction: column;
 }
 .playbar{
     width: calc(100%-40px);
